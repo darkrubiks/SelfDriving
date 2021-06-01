@@ -42,26 +42,49 @@ class CameraCalibration:
                 print(f'Found ChessBoard Pattern on image: {fname}')
 
                 if drawChess:
+                    # If drawChess draw the pattern found and save image
                     drawImg = cv2.drawChessboardCorners(img, self.chessboard_size, corners2, ret)
                     if not os.path.isdir('chess_pattern'):
                         os.mkdir('chess_pattern')
-                    cv2.imwrite('.\chess_pattern\\' + os.path.basename(fname), drawImg)
+                    cv2.imwrite('.\\chess_pattern\\' + os.path.basename(fname), drawImg)
             else:
                 print(f'Could not find ChessBoard Pattern on image: {fname}')
 
         if self.imgpoints:
-            _, mtx, _, _, _ = cv2.calibrateCamera(self.objpoints, self.imgpoints,
+            # Get camera matrix
+            _, mtx, dist, _, _ = cv2.calibrateCamera(self.objpoints, self.imgpoints,
                                                   gray.shape[::-1], None, None)
 
-            return mtx.tolist()
+            return mtx, dist
 
         else:
             return 0
 
 
-if __name__ == '__main__':
-    calib = CameraCalibration((5, 7), 0.015, '.\images')
-    camera_data = calib.get_matrix(True)
+def undistort(image, mtx, dist):
+    h, w = image.shape[:2]
+    newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w, h), 1, (w, h))
+    # undistort
+    dst = cv2.undistort(image, mtx, dist, None, newcameramtx)
+    # crop the image
+    x, y, w, h = roi
+    dst = dst[y:y + h, x:x + w]
+    return dst
 
-    with open('camera_data.p', 'wb') as fp:
-        pickle.dump(camera_data, fp)
+if __name__ == '__main__':
+    path = '.\\images'
+    calib = CameraCalibration((5, 7), 1, path)
+    mtx, dist = calib.get_matrix(True)
+
+    with open('mtx.p', 'wb') as fp:
+        pickle.dump(mtx.tolist(), fp)
+
+    with open('dist.p', 'wb') as fp:
+        pickle.dump(dist.tolist(), fp)
+
+    images = glob.glob(path + '/*.jpg')
+    for fname in images:
+        img = cv2.imread(fname)
+        if not os.path.isdir('undistort'):
+            os.mkdir('undistort')
+        cv2.imwrite('.\\undistort\\' + os.path.basename(fname), undistort(img, mtx, dist))
